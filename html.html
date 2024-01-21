@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Geo Mapping</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <style>
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+    </style>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster-src.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+</head>
+
+<body>
+    <label for="naceFilter">Filter by Nace Code:</label>
+    <select id="naceFilter" onchange="filterMarkers()">
+        <option value="all">All</option>
+    </select>
+
+    <div class="folium-map" id="map" ></div>
+
+    <script>
+        var map = L.map(
+                "map",
+                {
+                    center: [0, 0],
+                    crs: L.CRS.EPSG3857,
+                    zoom: 1,
+                    zoomControl: true,
+                    preferCanvas: false,
+                }
+            );
+        var markers;
+        var allNaceCodes = [];  // Array to store all unique Nace codes
+        var markerCluster;
+
+        function filterMarkers() {
+            var selectedNaceCode = document.getElementById('naceFilter').value;
+
+            $.ajax({
+                url: '/get_locations?nace_code=' + selectedNaceCode,
+                type: 'GET',
+                success: function (data) {
+                    clearMarkers();
+
+                    data.features.forEach(function (feature) {
+                        if (selectedNaceCode === 'all' || feature.properties.nace_codes.includes(selectedNaceCode)) {
+                            var marker = L.marker([feature.geometry.coordinates[1], feature.geometry.coordinates[0]])
+                                .bindPopup(feature.properties.company_name 
+                                    + '<br>' + feature.properties.address  
+                                    + '<br>' + feature.properties.company_nr
+                                    + '<br>' + feature.properties.employee_nr
+                                    + '<br>' + feature.properties.revenue);
+                            markerCluster.addLayer(marker);
+                        }
+                    });
+
+                    map.addLayer(markerCluster);
+                },
+                error: function (error) {
+                    console.log(error);
+                }
+            });
+        }
+
+        function clearMarkers() {
+            if (markerCluster) {
+                map.removeLayer(markerCluster);
+            }
+            markerCluster = L.markerClusterGroup();
+        }
+
+        $(document).ready(function () {
+            // Initialize your Leaflet map here
+            map = L.map('map').setView([50.8742245, 4.726316], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Initialize MarkerClusterGroup
+            markerCluster = L.markerClusterGroup();
+
+            // Fetch all unique Nace codes from the JSON data
+            $.ajax({
+                url: '/get_locations',
+                type: 'GET',
+                success: function (data) {
+                    data.features.forEach(function (feature) {
+                        feature.properties.nace_codes.forEach(function (naceCode) {
+                            if (!allNaceCodes.includes(naceCode)) {
+                                allNaceCodes.push(naceCode);
+                            }
+                        });
+                    });
+
+                    // Populate the dropdown with unique Nace codes
+                    allNaceCodes.forEach(function (naceCode) {
+                        $('#naceFilter').append('<option value="' + naceCode + '">' + 'Nace Code ' + naceCode + '</option>');
+                    });
+                },
+                error: function (error) {
+                    console.log(error);
+                }
+            });
+
+            // Initial markers
+            filterMarkers();
+        });
+    </script>
+</body>
+
+</html>
